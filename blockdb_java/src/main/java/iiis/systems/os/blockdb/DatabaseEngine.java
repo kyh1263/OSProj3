@@ -79,7 +79,7 @@ public class DatabaseEngine {
     }
 
     public boolean transfer(String fromId, String toId, int value) {
-        if (pattern.matcher(fromId).matches() && pattern.matcher(toId).matches() && value >= 0)
+        if (pattern.matcher(fromId).matches() && pattern.matcher(toId).matches() && !fromId.equals(toId) && value >= 0)
         {
             int fromBalance = getOrZero(fromId);
             if (value <= fromBalance)
@@ -99,11 +99,12 @@ public class DatabaseEngine {
     }
 
     public void writeTransactionLog(Transaction transaction) {
-        if (logLength % N == 0)
+        if (logLength == 0)
             blockBuilder.setBlockID(++blockId).setPrevHash("00000000").clearTransactions().setNonce("00000000");
         blockBuilder.addTransactions(transaction);
         writeFile(dataDir + blockId + ".json", blockBuilder.build().toString());//JsonFormat.printToString(blockBuilder.build());
         logLength++;
+        logLength%=N;
     }
 
     public static void writeFile(String filePath, String string) {
