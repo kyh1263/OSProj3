@@ -6,11 +6,11 @@
         <sourceOutputDir name="target/generated-sources/annotations" />
         <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
         <outputRelativeToContentRoot value="true" />
-        <module name="blockdb" />
+        <module name="blockdb_java" />
       </profile>
     </annotationProcessing>
     <bytecodeTargetLevel>
-      <module name="blockdb" target="1.7" />
+      <module name="blockdb_java" target="1.7" />
     </bytecodeTargetLevel>
   </component>
 </project>

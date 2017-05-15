@@ -3,7 +3,7 @@ package iiis.systems.os.blockdb;
 import java.util.HashMap;
 import java.util.regex.*;
 import java.io.*;
-import com.google.protobuf.util.JsonFormat;
+//import com.google.protobuf.util.JsonFormat;
 
 public class DatabaseEngine {
     private static DatabaseEngine instance = null;
@@ -44,14 +44,9 @@ public class DatabaseEngine {
     }
 
     public boolean put(String userId, int value) {
-        if (pattern.matcher(userId).matches() && value>=0)
+        if (pattern.matcher(userId).matches() && value >= 0)
         {
-            if (logLength % N == 0)
-                newBlock(++blockId);
-            Transaction transaction = Transaction.newBuilder().setType(Transaction.Types.PUT).setUserID(userId).setValue(value).build();
-            blockBuilder.addTransactions(transaction);
-            writeFile("./log/" + blockId + ".json", blockBuilder.build().toString());//JsonFormat.printToString(blockBuilder.build());
-            logLength++;
+            writeTransactionLog(Transaction.newBuilder().setType(Transaction.Types.PUT).setUserID(userId).setValue(value).build());
             balances.put(userId, value);
             return true;
         }
@@ -59,14 +54,9 @@ public class DatabaseEngine {
     }
 
     public boolean deposit(String userId, int value) {
-        if (pattern.matcher(userId).matches() && value>=0)
+        if (pattern.matcher(userId).matches() && value >= 0)
         {
-            if (logLength % N == 0)
-                newBlock(++blockId);
-            Transaction transaction = Transaction.newBuilder().setType(Transaction.Types.DEPOSIT).setUserID(userId).setValue(value).build();
-            blockBuilder.addTransactions(transaction);
-            writeFile("./log/" + blockId + ".json", blockBuilder.build().toString());//JsonFormat.printToString(blockBuilder.build());
-            logLength++;
+            writeTransactionLog(Transaction.newBuilder().setType(Transaction.Types.DEPOSIT).setUserID(userId).setValue(value).build());
             int balance = getOrZero(userId);
             balances.put(userId, balance + value);
             return true;
@@ -75,17 +65,12 @@ public class DatabaseEngine {
     }
 
     public boolean withdraw(String userId, int value) {
-        if (pattern.matcher(userId).matches() && value>=0)
+        if (pattern.matcher(userId).matches() && value >= 0)
         {
             int balance = getOrZero(userId);
-            if (value<=balance)
+            if (value <= balance)
             {
-                if (logLength % N == 0)
-                    newBlock(++blockId);
-                Transaction transaction = Transaction.newBuilder().setType(Transaction.Types.WITHDRAW).setUserID(userId).setValue(value).build();
-                blockBuilder.addTransactions(transaction);
-                writeFile("./log/" + blockId + ".json", blockBuilder.build().toString());//JsonFormat.printToString(blockBuilder.build());
-                logLength++;
+                writeTransactionLog(Transaction.newBuilder().setType(Transaction.Types.WITHDRAW).setUserID(userId).setValue(value).build());
                 balances.put(userId, balance - value);
                 return true;
             }
@@ -94,17 +79,12 @@ public class DatabaseEngine {
     }
 
     public boolean transfer(String fromId, String toId, int value) {
-        if (pattern.matcher(fromId).matches() && pattern.matcher(toId).matches() && value>=0)
+        if (pattern.matcher(fromId).matches() && pattern.matcher(toId).matches() && value >= 0)
         {
             int fromBalance = getOrZero(fromId);
-            if (value<=fromBalance)
+            if (value <= fromBalance)
             {
-                if (logLength % N == 0)
-                    newBlock(++blockId);
-                Transaction transaction = Transaction.newBuilder().setType(Transaction.Types.TRANSFER).setFromID(fromId).setToID(toId).setValue(value).build();
-                blockBuilder.addTransactions(transaction);
-                writeFile("./log/" + blockId + ".json", blockBuilder.build().toString());//JsonFormat.printToString(blockBuilder.build());
-                logLength++;
+                writeTransactionLog(Transaction.newBuilder().setType(Transaction.Types.TRANSFER).setFromID(fromId).setToID(toId).setValue(value).build());
                 int toBalance = getOrZero(toId);
                 balances.put(fromId, fromBalance - value);
                 balances.put(toId, toBalance + value);
@@ -118,8 +98,12 @@ public class DatabaseEngine {
         return logLength;
     }
 
-    public void newBlock(int blockId) {
-        blockBuilder.setBlockID(blockId).setPrevHash("00000000").clearTransactions().setNonce("00000000");
+    public void writeTransactionLog(Transaction transaction) {
+        if (logLength % N == 0)
+            blockBuilder.setBlockID(++blockId).setPrevHash("00000000").clearTransactions().setNonce("00000000");
+        blockBuilder.addTransactions(transaction);
+        writeFile(dataDir + blockId + ".json", blockBuilder.build().toString());//JsonFormat.printToString(blockBuilder.build());
+        logLength++;
     }
 
     public static void writeFile(String filePath, String string) {
