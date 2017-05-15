@@ -1,10 +1,11 @@
-BlockID: 2
-PrevHash: "00000000"
-Transactions {
-  Type: TRANSFER
-  FromID: "A0000000"
-  ToID: "A0000001"
-  Value: 5
+{
+  "BlockID": 2,
+  "PrevHash": "00000000",
+  "Transactions": [{
+    "Type": "TRANSFER",
+    "FromID": "A0000000",
+    "ToID": "A0000001",
+    "Value": 5
+  }],
+  "Nonce": "00000000"
 }
-Nonce: "00000000"
-

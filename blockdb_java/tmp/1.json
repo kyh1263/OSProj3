@@ -1,19 +1,18 @@
-BlockID: 1
-PrevHash: "00000000"
-Transactions {
-  Type: PUT
-  UserID: "A0000000"
-  Value: 10
+{
+  "BlockID": 1,
+  "PrevHash": "00000000",
+  "Transactions": [{
+    "Type": "PUT",
+    "UserID": "A0000000",
+    "Value": 10
+  }, {
+    "Type": "DEPOSIT",
+    "UserID": "A0000001",
+    "Value": 10
+  }, {
+    "Type": "WITHDRAW",
+    "UserID": "A0000001",
+    "Value": 5
+  }],
+  "Nonce": "00000000"
 }
-Transactions {
-  Type: DEPOSIT
-  UserID: "A0000001"
-  Value: 10
-}
-Transactions {
-  Type: WITHDRAW
-  UserID: "A0000001"
-  Value: 5
-}
-Nonce: "00000000"
-

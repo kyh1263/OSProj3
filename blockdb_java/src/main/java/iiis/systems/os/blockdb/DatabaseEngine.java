@@ -3,7 +3,7 @@ package iiis.systems.os.blockdb;
 import java.util.HashMap;
 import java.util.regex.*;
 import java.io.*;
-//import com.google.protobuf.util.JsonFormat;
+import com.google.protobuf.util.JsonFormat;
 
 public class DatabaseEngine {
     private static DatabaseEngine instance = null;
@@ -102,19 +102,21 @@ public class DatabaseEngine {
         if (logLength == 0)
             blockBuilder.setBlockID(++blockId).setPrevHash("00000000").clearTransactions().setNonce("00000000");
         blockBuilder.addTransactions(transaction);
-        writeFile(dataDir + blockId + ".json", blockBuilder.build().toString());//JsonFormat.printToString(blockBuilder.build());
+        writeFile(dataDir + blockId + ".json", blockBuilder.build());
         logLength++;
         logLength%=N;
     }
 
-    public static void writeFile(String filePath, String string) {
-        try {
+    public static void writeFile(String filePath, Block block) {
+        try
+        {
             FileWriter fileWriter = new FileWriter(filePath);
-            PrintWriter printWriter = new PrintWriter(fileWriter);
-            printWriter.write(string);
-            printWriter.println();
+            JsonFormat.printer().appendTo(block, fileWriter);
             fileWriter.close();
-            printWriter.close();
-        } catch (IOException e) {};
+        }
+        catch (IOException e)
+        {
+            System.out.println(e);
+        }
     }
 }
