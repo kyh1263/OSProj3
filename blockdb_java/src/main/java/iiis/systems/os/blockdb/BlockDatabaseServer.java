@@ -49,6 +49,7 @@ public class BlockDatabaseServer {
         DatabaseEngine.setup(dataDir);
 
         final BlockDatabaseServer server = new BlockDatabaseServer();
+        System.out.println("Server about to start!");
         server.start(address, port);
         server.blockUntilShutdown();
     }

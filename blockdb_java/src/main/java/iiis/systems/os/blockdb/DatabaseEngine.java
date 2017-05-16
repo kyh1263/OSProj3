@@ -1,6 +1,7 @@
 package iiis.systems.os.blockdb;
 
 import java.util.HashMap;
+import java.util.concurrent.Semaphore;
 import java.util.regex.*;
 import java.io.*;
 import com.google.protobuf.util.JsonFormat;
@@ -22,9 +23,11 @@ public class DatabaseEngine {
     private int blockId = 0;
     final int N = 3/*50*/;
     final int userIdLength = 8;
-    final String template = "[a-z0-9]{" + userIdLength + "}";
+    final String template = "[a-z0-9|-]{" + userIdLength + "}";
     Pattern pattern = Pattern.compile(template, Pattern.CASE_INSENSITIVE);
     Block.Builder blockBuilder = Block.newBuilder();
+
+    private Semaphore semaphore = new Semaphore(1);
 
     DatabaseEngine(String dataDir) {
         this.dataDir = dataDir;
@@ -44,52 +47,78 @@ public class DatabaseEngine {
     }
 
     public boolean put(String userId, int value) {
-        if (pattern.matcher(userId).matches() && value >= 0)
-        {
-            writeTransactionLog(Transaction.newBuilder().setType(Transaction.Types.PUT).setUserID(userId).setValue(value).build());
-            balances.put(userId, value);
-            return true;
+        try {
+            semaphore.acquire();
+            if (pattern.matcher(userId).matches() && value >= 0) {
+                writeTransactionLog(Transaction.newBuilder().setType(Transaction.Types.PUT).setUserID(userId).setValue(value).build());
+                balances.put(userId, value);
+                semaphore.release();
+                return true;
+            }
+            semaphore.release();
+            return false;
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        else return false;
+        return false;
     }
 
     public boolean deposit(String userId, int value) {
-        if (pattern.matcher(userId).matches() && value >= 0)
-        {
-            writeTransactionLog(Transaction.newBuilder().setType(Transaction.Types.DEPOSIT).setUserID(userId).setValue(value).build());
-            int balance = getOrZero(userId);
-            balances.put(userId, balance + value);
-            return true;
+        try {
+            semaphore.acquire();
+            if (pattern.matcher(userId).matches() && value >= 0) {
+                writeTransactionLog(Transaction.newBuilder().setType(Transaction.Types.DEPOSIT).setUserID(userId).setValue(value).build());
+                int balance = getOrZero(userId);
+                balances.put(userId, balance + value);
+                semaphore.release();
+                return true;
+            }
+            semaphore.release();
+            return false;
+        } catch (Exception e) {
+            e.printStackTrace();
         }
-        else return false;
+        return false;
     }
 
     public boolean withdraw(String userId, int value) {
-        if (pattern.matcher(userId).matches() && value >= 0)
-        {
-            int balance = getOrZero(userId);
-            if (value <= balance)
-            {
-                writeTransactionLog(Transaction.newBuilder().setType(Transaction.Types.WITHDRAW).setUserID(userId).setValue(value).build());
-                balances.put(userId, balance - value);
-                return true;
+        try {
+            semaphore.acquire();
+            if (pattern.matcher(userId).matches() && value >= 0) {
+                int balance = getOrZero(userId);
+                if (value <= balance) {
+                    writeTransactionLog(Transaction.newBuilder().setType(Transaction.Types.WITHDRAW).setUserID(userId).setValue(value).build());
+                    balances.put(userId, balance - value);
+                    semaphore.release();
+                    return true;
+                }
             }
+            semaphore.release();
+            return false;
+        } catch (Exception e) {
+            e.printStackTrace();
         }
         return false;
     }
 
     public boolean transfer(String fromId, String toId, int value) {
-        if (pattern.matcher(fromId).matches() && pattern.matcher(toId).matches() && !fromId.equals(toId) && value >= 0)
-        {
-            int fromBalance = getOrZero(fromId);
-            if (value <= fromBalance)
-            {
-                writeTransactionLog(Transaction.newBuilder().setType(Transaction.Types.TRANSFER).setFromID(fromId).setToID(toId).setValue(value).build());
-                int toBalance = getOrZero(toId);
-                balances.put(fromId, fromBalance - value);
-                balances.put(toId, toBalance + value);
-                return true;
+        try {
+            semaphore.acquire();
+            if (pattern.matcher(fromId).matches() && pattern.matcher(toId).matches() && !fromId.equals(toId) && value >= 0) {
+                int fromBalance = getOrZero(fromId);
+                if (value <= fromBalance) {
+                    writeTransactionLog(Transaction.newBuilder().setType(Transaction.Types.TRANSFER).setFromID(fromId).setToID(toId).setValue(value).build());
+                    int toBalance = getOrZero(toId);
+                    balances.put(fromId, fromBalance - value);
+                    balances.put(toId, toBalance + value);
+                    semaphore.release();
+                    return true;
+                }
             }
+            semaphore.release();
+            return false;
+        } catch (Exception e) {
+            e.printStackTrace();
         }
         return false;
     }
@@ -105,6 +134,24 @@ public class DatabaseEngine {
         writeFile(dataDir + blockId + ".json", blockBuilder.build());
         logLength++;
         logLength%=N;
+    }
+
+    private boolean runRestore() {
+        try {
+            semaphore.acquire();
+            int completeBlocks = 0;
+            int transientLogEntries = 0;
+
+            for (int i = 1; i <= completeBlocks; ++i) {
+                String jsonPath = dataDir + i + ".json";
+
+            }
+
+            semaphore.release();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return true;
     }
 
     public static void writeFile(String filePath, Block block) {
