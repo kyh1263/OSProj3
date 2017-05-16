@@ -5,6 +5,8 @@ import java.util.concurrent.Semaphore;
 import java.util.regex.*;
 import java.io.*;
 import com.google.protobuf.util.JsonFormat;
+import org.json.simple.parser.*;
+import org.json.simple.*;
 import org.json.JSONObject;
 
 public class DatabaseEngine {
@@ -19,20 +21,85 @@ public class DatabaseEngine {
     }
 
     private HashMap<String, Integer> balances = new HashMap<>();
-    private int logLength = 0;
+    private long logLength = 0;
     private String dataDir;
-    private int blockId = 0;
+
+    private long blockId = 1;
     final int N = 3/*50*/;
+
     final int userIdLength = 8;
     final String template = "[a-z0-9|-]{" + userIdLength + "}";
     Pattern pattern = Pattern.compile(template, Pattern.CASE_INSENSITIVE);
+
     Block.Builder blockBuilder = Block.newBuilder();
-    String serverLogInfoPath = dataDir + "serverLogInfo.json";
+    String serverLogInfoPath;
+    org.json.simple.JSONObject serverInfoJson;
 
     private Semaphore semaphore = new Semaphore(1);
 
     DatabaseEngine(String dataDir) {
         this.dataDir = dataDir;
+        serverLogInfoPath = dataDir + "serverLogInfo.json";
+
+        // create/open a JSON file, stores information including:
+        // 1. boolean flag : indicates whether first run
+        // 2. int completedBlockNumber : indicates how many blocks we have, updated consistently as id increases
+        // 3. int transientLogEntries : indicates how many entries there are in the transient log
+
+        JSONParser parser = new JSONParser();
+        try {
+            Object obj = parser.parse(new FileReader(serverLogInfoPath));
+
+            serverInfoJson = (org.json.simple.JSONObject) obj;
+            System.out.println(serverInfoJson);
+
+            boolean cleanStart = (boolean) serverInfoJson.get("cleanStart");
+
+            if (cleanStart == false) {
+                System.out.println("this is not a clean start...");
+                System.out.println("trying to restore...!!");
+                this.blockId = (long) serverInfoJson.get("completedBlockNumber");
+                this.logLength = (long) serverInfoJson.get("transientLogEntries");
+                runRestore();
+            }
+
+            /*String name = (String) jsonObject.get("name");
+            System.out.println(name);
+
+            long age = (Long) jsonObject.get("age");
+            System.out.println(age);*/
+
+            // loop array
+            /*JSONArray msg = (JSONArray) jsonObject.get("messages");
+            Iterator<String> iterator = msg.iterator();
+            while (iterator.hasNext()) {
+                System.out.println(iterator.next());
+            }*/
+
+        } catch (FileNotFoundException e) {
+            //If the file is not found, then it *probably* means this is a cold start
+            serverInfoJson = new org.json.simple.JSONObject();
+            serverInfoJson.put("cleanStart", false);
+            serverInfoJson.put("completedBlockNumber", 0);
+            serverInfoJson.put("transientLogEntries", 0);
+
+            try (FileWriter file = new FileWriter(serverLogInfoPath)) {
+
+                file.write(serverInfoJson.toString());
+                file.flush();
+
+            } catch (IOException exp) {
+                exp.printStackTrace();
+            }
+
+            System.out.print(serverInfoJson);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        } catch (ParseException e) {
+            e.printStackTrace();
+        }
+
     }
 
     private int getOrZero(String userId) {
@@ -126,16 +193,31 @@ public class DatabaseEngine {
     }
 
     public int getLogLength() {
-        return logLength;
+        return (int)logLength;
     }
 
     public void writeTransactionLog(Transaction transaction) {
         if (logLength == 0)
-            blockBuilder.setBlockID(++blockId).setPrevHash("00000000").clearTransactions().setNonce("00000000");
+            blockBuilder.setBlockID((int)(blockId)).setPrevHash("00000000").clearTransactions().setNonce("00000000");
         blockBuilder.addTransactions(transaction);
         writeFile(dataDir + blockId + ".json", blockBuilder.build());
         logLength++;
         logLength%=N;
+
+        if (logLength == 0) {
+            ++blockId;
+        }
+
+        serverInfoJson.put("completedBlockNumber", blockId - 1);
+        serverInfoJson.put("transientLogEntries", logLength);
+        try (FileWriter file = new FileWriter(serverLogInfoPath))
+        {
+            file.write(serverInfoJson.toString());
+            System.out.println("Successfully updated json object to file...!!");
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
     }
 
     private boolean runRestore() {
@@ -154,52 +236,64 @@ public class DatabaseEngine {
                 JsonFormat.parser().merge(fileReader, builder);
 
                 for (int j = 0 ; j < N; ++j) {
+                    System.out.println("restoring block: " + i + "transaction: " + j);
                     Transaction thisTransaction = builder.getTransactions(j);
-                    String userId = thisTransaction.getUserID();
-                    String fromId = thisTransaction.getFromID();
-                    String toId = thisTransaction.getToID();
-                    int value = thisTransaction.getValue();
-                    Transaction.Types type = thisTransaction.getType();
-                    int balance = 0;
-
-                    switch (type) {
-                        case PUT:
-                            balances.put(userId, value);
-                            break;
-                        case DEPOSIT:
-                            balance = getOrZero(userId);
-                            balances.put(userId, balance + value);
-                            break;
-                        case WITHDRAW:
-                            balance = getOrZero(userId);
-                            if (value <= balance) {
-                                balances.put(userId, balance - value);
-                            }
-                            break;
-                        case TRANSFER:
-                            int fromBalance = getOrZero(fromId);
-                            if (value <= fromBalance) {
-                                int toBalance = getOrZero(toId);
-                                balances.put(fromId, fromBalance - value);
-                                balances.put(toId, toBalance + value);
-                            }
-                            break;
-                        default:
-                            return false;
-                    }
+                    restoreThisTransaction(thisTransaction);
                 }
-
             }
 
             //restore transient logs
-            int i = completeBlocks + 1;
-            String jsonPath = dataDir + i + ".json";
-            JSONObject jsonblock = Util.readJsonFile(jsonPath);
+            int transientId = completeBlocks + 1;
+            String jsonPath = dataDir + transientId + ".json";
+            FileReader fileReader = new FileReader(jsonPath);
+            Block.Builder builder = Block.newBuilder();
+            JsonFormat.parser().merge(fileReader, builder);
+            for (int i = 0; i < transientLogEntries; ++i) {
+                System.out.println("restoring transient log: " + i);
+                Transaction thisTransaction = builder.getTransactions(i);
+                restoreThisTransaction(thisTransaction);
+            }
 
             semaphore.release();
             return true;
         } catch (Exception e) {
             e.printStackTrace();
+        }
+        return false;
+    }
+
+    private boolean restoreThisTransaction(Transaction thisTransaction) {
+        String userId = thisTransaction.getUserID();
+        String fromId = thisTransaction.getFromID();
+        String toId = thisTransaction.getToID();
+        int value = thisTransaction.getValue();
+        Transaction.Types type = thisTransaction.getType();
+        int balance;
+
+        switch (type) {
+            case PUT:
+                balances.put(userId, value);
+                break;
+            case DEPOSIT:
+                balance = getOrZero(userId);
+                balances.put(userId, balance + value);
+                break;
+            case WITHDRAW:
+                balance = getOrZero(userId);
+                if (value <= balance) {
+                    balances.put(userId, balance - value);
+                }
+                break;
+            case TRANSFER:
+                int fromBalance = getOrZero(fromId);
+                if (value <= fromBalance) {
+                    int toBalance = getOrZero(toId);
+                    balances.put(fromId, fromBalance - value);
+                    balances.put(toId, toBalance + value);
+                }
+                break;
+            default:
+                return false;
         }
         return false;
     }
