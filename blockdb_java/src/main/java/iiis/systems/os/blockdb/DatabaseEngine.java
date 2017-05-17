@@ -25,7 +25,7 @@ public class DatabaseEngine {
     private String dataDir;
 
     private long blockId = 1;
-    final int N = 3/*50*/;
+    final int N = 50; //modified
 
     final int userIdLength = 8;
     final String template = "[a-z0-9|-]{" + userIdLength + "}";
@@ -47,8 +47,8 @@ public class DatabaseEngine {
         // 3. int transientLogEntries : indicates how many entries there are in the transient log
 
         JSONParser parser = new JSONParser();
-        File dir = new File(dataDir);
-        boolean successful = dir.mkdir();
+        File dir = new File(dataDir); //modified
+        boolean successful = dir.mkdirs(); //modified
         if (successful) {
             // creating the directory succeeded
             System.out.println("directory was created successfully");
@@ -75,7 +75,8 @@ public class DatabaseEngine {
                 this.logLength = (long) serverInfoJson.get("transientLogEntries");
 
                 try {
-                    String jsonPath = dataDir + this.blockId + ".json";
+                    //String jsonPath = dataDir + this.blockId + ".json";
+                    String jsonPath = dataDir + "log.txt"; //modified    
                     FileReader fileReader = new FileReader(jsonPath);
                     JsonFormat.parser().merge(fileReader, blockBuilder);
                 } catch (FileNotFoundException e) {
@@ -137,15 +138,16 @@ public class DatabaseEngine {
 
     public int get(String userId) {
         //logLength++;
+        int value = 0; //modified
         try {
-            semaphore.acquire();
-            int value = getOrZero(userId);
-            semaphore.release();
-            return value;
+            semaphore.acquire(); //modified
+            //return getOrZero(userId);
+            value = getOrZero(userId);
+            semaphore.release(); //modified
         } catch (Exception e) {
             e.printStackTrace();
         }
-        return 0;
+        return value; //modified
     }
 
     public boolean put(String userId, int value) {
@@ -233,11 +235,13 @@ public class DatabaseEngine {
         if (logLength == 0)
             blockBuilder.setBlockID((int)(blockId)).setPrevHash("00000000").clearTransactions().setNonce("00000000");
         blockBuilder.addTransactions(transaction);
-        writeFile(dataDir + blockId + ".json", blockBuilder.build());
+        //writeFile(dataDir + blockId + ".json", blockBuilder.build());
+        writeFile(dataDir + "log.txt", blockBuilder.build()); //modified
         logLength++;
         logLength%=N;
 
         if (logLength == 0) {
+            moveLog(dataDir, (int)blockId); //modified
             ++blockId;
         }
 
@@ -251,6 +255,16 @@ public class DatabaseEngine {
             e.printStackTrace();
         }
 
+    }
+
+    public void moveLog(String dataDir, int blockId) {
+        try {
+            System.out.println("Here should be a move!"); //modified
+            File logFile = new File(dataDir + "log.txt"); //modified
+            logFile.renameTo(new File(dataDir + blockId + ".json")); //modified
+        } catch(Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private boolean runRestore() {
@@ -278,8 +292,9 @@ public class DatabaseEngine {
 
             //restore transient logs
             if (transientLogEntries > 0) {
-                int transientId = completeBlocks + 1;
-                String jsonPath = dataDir + transientId + ".json";
+                //int transientId = completeBlocks + 1;
+                //String jsonPath = dataDir + transientId + ".json";
+                String jsonPath = dataDir + "log.txt";
                 FileReader fileReader = new FileReader(jsonPath);
                 Block.Builder builder = Block.newBuilder();
                 JsonFormat.parser().merge(fileReader, builder);
@@ -347,3 +362,4 @@ public class DatabaseEngine {
         }
     }
 }
+
