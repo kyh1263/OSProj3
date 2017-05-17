@@ -47,6 +47,17 @@ public class DatabaseEngine {
         // 3. int transientLogEntries : indicates how many entries there are in the transient log
 
         JSONParser parser = new JSONParser();
+        File dir = new File("./tmp");
+        boolean successful = dir.mkdir();
+        if (successful) {
+            // creating the directory succeeded
+            System.out.println("directory was created successfully");
+        }
+        else {
+            // creating the directory failed
+            System.out.println("failed trying to create the directory");
+        }
+
         try {
             Object obj = parser.parse(new FileReader(serverLogInfoPath));
 
@@ -89,7 +100,7 @@ public class DatabaseEngine {
 
         } catch (FileNotFoundException e) {
             //If the file is not found, then it *probably* means this is a cold start
-            e.printStackTrace();
+            //e.printStackTrace();
             serverInfoJson = new org.json.simple.JSONObject();
             serverInfoJson.put("cleanStart", false);
             serverInfoJson.put("completedBlockNumber", 0);
@@ -99,13 +110,14 @@ public class DatabaseEngine {
 
                 file.write(serverInfoJson.toString());
                 file.flush();
+                System.out.println("created serverLogInfoPath...!!");
+                System.out.println(serverInfoJson);
 
             } catch (IOException exp) {
                 exp.printStackTrace();
             }
 
-            System.out.println("Serverinfo Json not found...!!");
-            System.out.println(serverInfoJson);
+
 
         } catch (IOException e) {
             e.printStackTrace();
