@@ -51,6 +51,7 @@ public class DatabaseEngine {
             Object obj = parser.parse(new FileReader(serverLogInfoPath));
 
             serverInfoJson = (org.json.simple.JSONObject) obj;
+            System.out.println("serverInfoJson");
             System.out.println(serverInfoJson);
 
             boolean cleanStart = (boolean) serverInfoJson.get("cleanStart");
@@ -59,7 +60,17 @@ public class DatabaseEngine {
                 System.out.println("this is not a clean start...");
                 System.out.println("trying to restore...!!");
                 this.blockId = (long) serverInfoJson.get("completedBlockNumber");
+                ++this.blockId;
                 this.logLength = (long) serverInfoJson.get("transientLogEntries");
+
+                try {
+                    String jsonPath = dataDir + this.blockId + ".json";
+                    FileReader fileReader = new FileReader(jsonPath);
+                    JsonFormat.parser().merge(fileReader, blockBuilder);
+                } catch (FileNotFoundException e) {
+                    System.out.println("cannot find transient log, it has not been created yet");
+                }
+
                 runRestore();
             }
 
@@ -78,6 +89,7 @@ public class DatabaseEngine {
 
         } catch (FileNotFoundException e) {
             //If the file is not found, then it *probably* means this is a cold start
+            e.printStackTrace();
             serverInfoJson = new org.json.simple.JSONObject();
             serverInfoJson.put("cleanStart", false);
             serverInfoJson.put("completedBlockNumber", 0);
@@ -92,7 +104,8 @@ public class DatabaseEngine {
                 exp.printStackTrace();
             }
 
-            System.out.print(serverInfoJson);
+            System.out.println("Serverinfo Json not found...!!");
+            System.out.println(serverInfoJson);
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -223,6 +236,7 @@ public class DatabaseEngine {
     private boolean runRestore() {
         try {
             semaphore.acquire();
+
             JSONObject serverLogJson = Util.readJsonFile(serverLogInfoPath);
             int completeBlocks = serverLogJson.getInt("completedBlockNumber");
             int transientLogEntries = serverLogJson.getInt("transientLogEntries");
@@ -236,22 +250,24 @@ public class DatabaseEngine {
                 JsonFormat.parser().merge(fileReader, builder);
 
                 for (int j = 0 ; j < N; ++j) {
-                    System.out.println("restoring block: " + i + "transaction: " + j);
+                    System.out.println("restoring block: " + i + " transaction: " + j);
                     Transaction thisTransaction = builder.getTransactions(j);
                     restoreThisTransaction(thisTransaction);
                 }
             }
 
             //restore transient logs
-            int transientId = completeBlocks + 1;
-            String jsonPath = dataDir + transientId + ".json";
-            FileReader fileReader = new FileReader(jsonPath);
-            Block.Builder builder = Block.newBuilder();
-            JsonFormat.parser().merge(fileReader, builder);
-            for (int i = 0; i < transientLogEntries; ++i) {
-                System.out.println("restoring transient log: " + i);
-                Transaction thisTransaction = builder.getTransactions(i);
-                restoreThisTransaction(thisTransaction);
+            if (transientLogEntries > 0) {
+                int transientId = completeBlocks + 1;
+                String jsonPath = dataDir + transientId + ".json";
+                FileReader fileReader = new FileReader(jsonPath);
+                Block.Builder builder = Block.newBuilder();
+                JsonFormat.parser().merge(fileReader, builder);
+                for (int i = 0; i < transientLogEntries; ++i) {
+                    System.out.println("restoring transient log: " + i);
+                    Transaction thisTransaction = builder.getTransactions(i);
+                    restoreThisTransaction(thisTransaction);
+                }
             }
 
             semaphore.release();
