@@ -47,7 +47,7 @@ public class DatabaseEngine {
         // 3. int transientLogEntries : indicates how many entries there are in the transient log
 
         JSONParser parser = new JSONParser();
-        File dir = new File("./tmp");
+        File dir = new File(dataDir);
         boolean successful = dir.mkdir();
         if (successful) {
             // creating the directory succeeded
@@ -137,7 +137,15 @@ public class DatabaseEngine {
 
     public int get(String userId) {
         //logLength++;
-        return getOrZero(userId);
+        try {
+            semaphore.acquire();
+            int value = getOrZero(userId);
+            semaphore.release();
+            return value;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return 0;
     }
 
     public boolean put(String userId, int value) {
