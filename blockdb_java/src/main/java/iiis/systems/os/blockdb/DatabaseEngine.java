@@ -28,7 +28,7 @@ public class DatabaseEngine {
     final int N = 50; //modified
 
     final int userIdLength = 8;
-    final String template = "[a-z0-9|-]{" + userIdLength + "}";
+    final String template = ".{" + userIdLength + "}";
     Pattern pattern = Pattern.compile(template, Pattern.CASE_INSENSITIVE);
 
     Block.Builder blockBuilder = Block.newBuilder();
